@@ -26,6 +26,8 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Tue Mar 18 09:30:05 MDT 2014
 # Rev: 
+#          0.6 - Delete all but the oldest hold. 
+#                Used when same item held multiple times. 
 #          0.5 - Title or copy holds too. 
 #          0.4 - Title holds too. 
 #          0.3 - Select all holds. 
@@ -53,7 +55,7 @@ my $HOLD_TRX   = "$WORKING_DIR/cancel_hold.trx";
 my $HOLD_RSP   = "$WORKING_DIR/cancel_hold.rsp";
 my $TMP        = "$WORKING_DIR/cancel_hold.tmp";
 my $HOLD_TYPE  = qq{C};
-my $VERSION    = qq{0.5};
+my $VERSION    = qq{0.6};
 
 #
 # Message about this program and how to use it.
@@ -71,6 +73,7 @@ Use the '-B' switch will determine which user account is
 to be affected.
 
  -B: REQUIRED User ID.
+ -k: Deduplicate holds keeping the oldest, or original hold.
  -t: Cancel title level holds (cancel COPY level holds by default).
  -U: Actually places or removes holds. Default just produce transaction commands.
  -x: This (help) message.
@@ -91,7 +94,7 @@ EOF
 # return: 
 sub init
 {
-    my $opt_string = 'B:tUx';
+    my $opt_string = 'B:ktUx';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
     usage() if ( ! $opt{'B'} );
@@ -157,6 +160,16 @@ sub getItemCallnum( $ )
 		$hashRef->{$itemId} = "$callnum|$copyNum";
 	}
 }
+# Given a selection of hold keys, pick the smallest, it is the oldest.
+# param:  array of hold keys.
+# return: oldest hold key.
+sub getOldestHoldKey
+{
+	my @holdKeys = @_;
+	reverse( @holdKeys ); # reorder so smallest (oldest) last.
+	shift( @holdKeys ); # remove last so it is spared.
+	return @holdKeys;    # This will commonly be empty on return.
+}
 
 # E201411201028360688R ^S82FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UODISCARD-BTGFTG^HKCOPY^HH22193634
 # ^NQ31221111074451^IQMOR^IS1^dC3^Fv3000000^^O
@@ -188,6 +201,8 @@ sub cancelHolds( $$$ )
 		my $hKeys = $itemIdHoldKeyHash->{ $itemId };
 		next if ( ! defined $hKeys );
 		my @holdKeys= split( '\|', $hKeys );
+		# If there is more than one hold for the same item, then keep just one.
+		@holdKeys = getOldestHoldKey( @holdKeys ) if ( $opt{'k'} );
 		foreach my $holdKey ( @holdKeys )
 		{
 			if ( ! defined $holdKey or ! defined $callNumber or ! defined $copyNumber )
