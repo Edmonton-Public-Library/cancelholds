@@ -2,11 +2,26 @@
 
 Project Notes
 -------------
-Holdbot is an application that will take a list of hold keys, or item ids, cancel the those hold 
-on those items and output the user ids that were effected. 
+Cancels copy level holds. The script expects a list of items on stdin
+which must have the barcode of the item; one per line. Alternatively
+you can use '*' on STDIN to cancel all holds on customer account.
+
+Use the '-B' switch will determine which user account is 
+to be affected.
+
+ -B: REQUIRED User ID.
+ -t: Cancel title level holds (cancel COPY level holds by default).
+ -U: Actually places or removes holds. Default just produce transaction commands.
+ -x: This (help) message.
+
+example: 
+ $0 -x
+ cat user_keys.lst | $0 -B 21221012345678 -U
+ cat user_keys.lst | $0 -B 21221012345678 -tU
+ cat item_keys.lst | $0 
 
 Instructions for Running:
-./holdbot
+./cancelholds.pl -x
 
 Product Description:
 Perl script written by Andrew Nisbet for Edmonton Public Library, distributable by the enclosed license.
@@ -15,7 +30,10 @@ Repository Information:
 This product is under version control using Git.
 
 Dependencies:
-None
+selhold
+seluser
+selitem
+selcallnum
 
 Known Issues:
 None

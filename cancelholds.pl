@@ -26,6 +26,10 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Tue Mar 18 09:30:05 MDT 2014
 # Rev: 
+#          0.5 - Title or copy holds too. 
+#          0.4 - Title holds too. 
+#          0.3 - Select all holds. 
+#          0.2 - Fix for ACTIVE holds. 
 #          0.1 - Development after some time away. 
 #          0.0 - Dev. 
 #
@@ -48,7 +52,8 @@ my $WORKING_DIR= qq{.};
 my $HOLD_TRX   = "$WORKING_DIR/cancel_hold.trx";
 my $HOLD_RSP   = "$WORKING_DIR/cancel_hold.rsp";
 my $TMP        = "$WORKING_DIR/cancel_hold.tmp";
-my $VERSION    = qq{0.1};
+my $HOLD_TYPE  = qq{C};
+my $VERSION    = qq{0.5};
 
 #
 # Message about this program and how to use it.
@@ -59,19 +64,21 @@ sub usage()
 
 	usage: $0 [-xU] -B<barcode> 
 Cancels copy level holds. The script expects a list of items on stdin
-which must have the barcode of the item; one per line.
+which must have the barcode of the item; one per line. Alternatively
+you can use '*' on STDIN to cancel all holds on customer account.
 
 Use the '-B' switch will determine which user account is 
 to be affected.
 
  -B: REQUIRED User ID.
+ -t: Cancel title level holds (cancel COPY level holds by default).
  -U: Actually places or removes holds. Default just produce transaction commands.
  -x: This (help) message.
 
 example: 
  $0 -x
  cat user_keys.lst | $0 -B 21221012345678 -U
- cat user_keys.lst | $0 -B 21221012345678 
+ cat user_keys.lst | $0 -B 21221012345678 -tU
  cat item_keys.lst | $0
  
 Version: $VERSION
@@ -84,10 +91,11 @@ EOF
 # return: 
 sub init
 {
-    my $opt_string = 'B:Ux';
+    my $opt_string = 'B:tUx';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
     usage() if ( ! $opt{'B'} );
+	$HOLD_TYPE = qq{T} if ( $opt{'t'} );
 }
 
 # Trim function to remove whitespace from the start and end of the string.
@@ -110,7 +118,7 @@ sub getUserHolds( $$ )
 	my $userID   = shift;
 	my $holdHash = shift;
 	chomp( $userID );
-	my $results  = `echo "$userID" | seluser -iB -oU | selhold -iU -oIK 2>/dev/null | selitem -iI -oBS 2>/dev/null`;
+	my $results  = `echo "$userID" | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_TYPE" -oIK 2>/dev/null | selitem -iI -oBS 2>/dev/null`;
 	# Which produces something like:
 	# Item ID         |Holdkey|
 	# 31221052193963  |8863617|
@@ -121,7 +129,15 @@ sub getUserHolds( $$ )
 	{
 		my ( $itemId, $holdKey ) = split( '\|', $line );
 		$itemId = trim( $itemId );
-		$holdHash->{$itemId} = $holdKey;
+		if ( defined $holdHash->{ $itemId } )
+		{
+			# Concatenate multiple hold keys because a user can have more than one hold for the same item.
+			$holdHash->{ $itemId } .= "|$holdKey";
+		}
+		else
+		{
+			$holdHash->{ $itemId } = $holdKey;
+		}
 	}
 }
 
@@ -138,7 +154,7 @@ sub getItemCallnum( $ )
 	{
 		my ( $itemId, $catKey, $callSeq, $copyNum, $callnum ) = split( '\|', $line );
 		$itemId = trim( $itemId );
-		$hashRef->{$itemId} = "$callnum $copyNum";
+		$hashRef->{$itemId} = "$callnum|$copyNum";
 	}
 }
 
@@ -167,16 +183,21 @@ sub cancelHolds( $$$ )
 	while( my ( $itemId, $callNumCopyNum ) = each %$itemIdCallnumHash ) 
 	{
 		# We had to concat the copy number to the callnum so split it now.
-		my ( $callNumber, $copyNumber ) = split( ' ', $callNumCopyNum );
+		my ( $callNumber, $copyNumber ) = split( '\|', $callNumCopyNum );
 		# Use the itemId to find the hold key.
-		my $holdKey = $itemIdHoldKeyHash->{ $itemId };
-		if ( ! defined $holdKey or ! defined $callNumber or ! defined $copyNumber )
+		my $hKeys = $itemIdHoldKeyHash->{ $itemId };
+		next if ( ! defined $hKeys );
+		my @holdKeys= split( '\|', $hKeys );
+		foreach my $holdKey ( @holdKeys )
 		{
-			next;
+			if ( ! defined $holdKey or ! defined $callNumber or ! defined $copyNumber )
+			{
+				next;
+			}
+			$transactionSequenceNumber = 1 if ( $transactionSequenceNumber++ >= 99 );
+			print TRX getCancelHoldTransaction( $userId, $holdKey, $itemId, $callNumber, $copyNumber, $transactionSequenceNumber );
+			$count++;
 		}
-		$transactionSequenceNumber = 1 if ( $transactionSequenceNumber++ >= 99 );
-		print TRX getCancelHoldTransaction( $userId, $holdKey, $itemId, $callNumber, $copyNumber, $transactionSequenceNumber );
-		$count++;
 	}
 	close TRX;
 	return $count;
@@ -211,13 +232,19 @@ sub getCancelHoldTransaction( $$$$$$ )
 	$transactionRequestLine .= '^FcNONE';
 	$transactionRequestLine .= '^FWADMIN';
 	$transactionRequestLine .= '^UO'.$userId;
-	$transactionRequestLine .= '^HKCOPY';
+	if ( $opt{'t'} )
+	{
+		$transactionRequestLine .= '^HKTITLE';
+	}
+	else
+	{
+		$transactionRequestLine .= '^HKCOPY';
+	}
 	$transactionRequestLine .= '^HH'.$holdKey;
 	$transactionRequestLine .= '^NQ'.$itemId;
 	$transactionRequestLine .= '^IQ'.$callNumber;
 	$transactionRequestLine .= '^IS'.$copyNumber;
 	$transactionRequestLine .= '^dC3'; # workflows.
-	# $transactionRequestLine .= '^OM';  # master override (and why not?)
 	$transactionRequestLine .= '^Fv3000000';
 	$transactionRequestLine .= '^^O';
 	return "$transactionRequestLine\n";
@@ -228,6 +255,12 @@ init();
 open HOLDKEYS, ">$TMP"  or die "**Error: unable to open tmp file '$TMP', $!\n";
 while (<>) 
 {
+	# Allow a user to specify all holds with a '*'
+	if ( m/\*/ )
+	{
+		print HOLDKEYS `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_TYPE" -oI 2>/dev/null | selitem -iI -oB 2>/dev/null`;
+		last;
+	}
 	# Item barcodes coming in, ignore lines that aren't real barcodes.
 	if ( ! m/^\d{14,}/ )
 	{

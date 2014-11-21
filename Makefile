@@ -1,5 +1,5 @@
 ####################################################
-# Makefile for project holdbot 
+# Makefile for project cancelholds 
 # Created: Tue Mar 18 09:30:05 MDT 2014
 #
 #<one line to give the program's name and a brief idea of what it does.>
@@ -29,8 +29,8 @@ PRODUCTION_SERVER=eplapp.library.ualberta.ca
 TEST_SERVER=edpl-t.library.ualberta.ca
 USER=sirsi
 REMOTE=~/Unicorn/EPLwork/anisbet/
-LOCAL=~/projects/holdbot/
-APP=holdbot.pl
+LOCAL=~/projects/cancelholds/
+APP=cancelholds.pl
 ARGS=-x
 
 put: test
@@ -41,5 +41,5 @@ test:
 	perl -c ${APP}
 	
 production: test
-	scp ${LOCAL}${APP} ${USER}@${PRODUCTION_SERVER}:${REMOTE}
+	scp ${LOCAL}${APP} ${USER}@${PRODUCTION_SERVER}:/s/sirsi/Unicorn/Bincustom
 
