@@ -2,6 +2,8 @@
 
 Project Notes
 -------------
+Holdbot is an application that will take a list of hold keys, or item ids, cancel the those hold 
+on those items and output the user ids that were effected. 
 
 Instructions for Running:
 ./holdbot
