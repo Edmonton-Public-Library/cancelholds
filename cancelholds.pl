@@ -6,7 +6,7 @@
 # Method:  API.
 #
 # Cancels and places any holds on SirsiDynix Symphony ILS.
-#    Copyright (C) 2013  Andrew Nisbet
+#    Copyright (C) 2014  Andrew Nisbet
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -66,7 +66,7 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-xU] -B<barcode> 
+	usage: $0 [-xUt] -B<barcode> 
 Cancels copy level holds. The script expects a list of items on stdin
 which must have the barcode of the item; one per line. Alternatively
 you can use '*' on STDIN to cancel all holds on customer account.
