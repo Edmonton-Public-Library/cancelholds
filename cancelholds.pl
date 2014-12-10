@@ -26,6 +26,8 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Tue Mar 18 09:30:05 MDT 2014
 # Rev: 
+#          0.7 - Ignore trailing strings after initial bar code.
+#                This allows people to cut and paste from Weed reports. 
 #          0.6 - Delete all but the oldest hold. 
 #                Used when same item held multiple times. 
 #          0.5 - Title or copy holds too. 
@@ -55,7 +57,7 @@ my $HOLD_TRX   = "$WORKING_DIR/cancel_hold.trx";
 my $HOLD_RSP   = "$WORKING_DIR/cancel_hold.rsp";
 my $TMP        = "$WORKING_DIR/cancel_hold.tmp";
 my $HOLD_TYPE  = qq{C};
-my $VERSION    = qq{0.6};
+my $VERSION    = qq{0.7};
 
 #
 # Message about this program and how to use it.
@@ -165,8 +167,7 @@ sub getItemCallnum( $ )
 # return: oldest hold key.
 sub getOldestHoldKey
 {
-	my @holdKeys = @_;
-	reverse( @holdKeys ); # reorder so smallest (oldest) last.
+	my @holdKeys = reverse( @_ ); # reorder so smallest (oldest) last.
 	shift( @holdKeys ); # remove last so it is spared.
 	return @holdKeys;    # This will commonly be empty on return.
 }
@@ -270,7 +271,8 @@ init();
 open HOLDKEYS, ">$TMP"  or die "**Error: unable to open tmp file '$TMP', $!\n";
 while (<>) 
 {
-	# Allow a user to specify all holds with a '*'
+	# Allow a user to specify all holds with a '*'. If this occurs mid list the remainder
+	# of the list will be unprocessed and the script will process all holds for the user.
 	if ( m/\*/ )
 	{
 		print HOLDKEYS `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_TYPE" -oI 2>/dev/null | selitem -iI -oB 2>/dev/null`;
@@ -282,7 +284,12 @@ while (<>)
 		print STDERR "*Warning: ignoring invalid item '$_'.\n";
 		next;
 	}
-	print HOLDKEYS;
+	else
+	{
+		my $barcode = $_;
+		$barcode =~ s/\s{1,}.+//;
+		print HOLDKEYS "$barcode\n";
+	}
 }
 close HOLDKEYS;
 
