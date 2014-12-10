@@ -77,7 +77,7 @@ to be affected.
  -B: REQUIRED User ID.
  -k: Deduplicate holds keeping the oldest, or original hold.
  -t: Cancel title level holds (cancel COPY level holds by default).
- -U: Actually places or removes holds. Default just produce transaction commands.
+ -U: Actually removes holds. Default just produce transaction commands.
  -x: This (help) message.
 
 example: 
