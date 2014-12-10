@@ -82,9 +82,10 @@ to be affected.
 
 example: 
  $0 -x
- cat user_keys.lst | $0 -B 21221012345678 -U
- cat user_keys.lst | $0 -B 21221012345678 -tU
- cat item_keys.lst | $0
+ cat item_ids.lst | $0 -B 21221012345678 -U
+ cat item_ids.lst | $0 -B 21221012345678 -tU
+ echo "*" | $0 -B 21221012345678 -tU # Cancels all title holds on account.
+ cat item_ids.lst | $0
  
 Version: $VERSION
 EOF
