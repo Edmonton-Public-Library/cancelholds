@@ -28,7 +28,7 @@
 PRODUCTION_SERVER=eplapp.library.ualberta.ca
 TEST_SERVER=edpl-t.library.ualberta.ca
 USER=sirsi
-REMOTE=~/Unicorn/EPLwork/anisbet/
+REMOTE=~/Unicorn/Bincustom/
 LOCAL=~/projects/cancelholds/
 APP=cancelholds.pl
 ARGS=-x
@@ -41,5 +41,5 @@ test:
 	perl -c ${APP}
 	
 production: test
-	scp ${LOCAL}${APP} ${USER}@${PRODUCTION_SERVER}:/s/sirsi/Unicorn/Bincustom
+	scp ${LOCAL}${APP} ${USER}@${PRODUCTION_SERVER}:${REMOTE}
 
