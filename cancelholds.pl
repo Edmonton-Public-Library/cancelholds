@@ -281,7 +281,8 @@ while (<>)
 		last;
 	}
 	my $barcode = $_;
-	$barcode =~ s/\s{1,}.+//;
+	chomp $barcode;
+	$barcode =~ s/\s{1,}.+//g;
 	print HOLDKEYS "$barcode\n";
 }
 close HOLDKEYS;
