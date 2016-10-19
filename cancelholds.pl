@@ -26,6 +26,8 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Tue Mar 18 09:30:05 MDT 2014
 # Rev: 
+#          0.8.02 - Fixs in general.
+#          0.8.01 - Fix warning on stdout.
 #          0.8 - Accept on order item ids.
 #          0.7 - Ignore trailing strings after initial bar code.
 #                This allows people to cut and paste from Weed reports. 
@@ -57,8 +59,9 @@ my $WORKING_DIR= qq{.};
 my $HOLD_TRX   = "$WORKING_DIR/cancel_hold.trx";
 my $HOLD_RSP   = "$WORKING_DIR/cancel_hold.rsp";
 my $TMP        = "$WORKING_DIR/cancel_hold.tmp";
-my $HOLD_TYPE  = qq{C};
-my $VERSION    = qq{0.8};
+my $HOLD_TYPE  = qq{COPY};
+my $HOLD_CHAR  = '';         # The hold type during API selection with selhold. Filled in in init().
+my $VERSION    = qq{0.8.02};
 
 #
 # Message about this program and how to use it.
@@ -102,7 +105,8 @@ sub init
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
     usage() if ( ! $opt{'B'} );
-	$HOLD_TYPE = qq{T} if ( $opt{'t'} );
+	$HOLD_TYPE = qq{TITLE} if ( $opt{'t'} );
+	$HOLD_CHAR = substr( $HOLD_TYPE, 0, 1 );
 }
 
 # Trim function to remove whitespace from the start and end of the string.
@@ -125,7 +129,7 @@ sub getUserHolds( $$ )
 	my $userID   = shift;
 	my $holdHash = shift;
 	chomp( $userID );
-	my $results  = `echo "$userID" | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_TYPE" -oIK 2>/dev/null | selitem -iI -oBS 2>/dev/null`;
+	my $results  = `echo "$userID" | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_CHAR" -oIK | selitem -iI -oBS`;
 	# Which produces something like:
 	# Item ID         |Holdkey|
 	# 31221052193963  |8863617|
@@ -250,14 +254,7 @@ sub getCancelHoldTransaction( $$$$$$ )
 	$transactionRequestLine .= '^FcNONE';
 	$transactionRequestLine .= '^FWADMIN';
 	$transactionRequestLine .= '^UO'.$userId;
-	if ( $opt{'t'} )
-	{
-		$transactionRequestLine .= '^HKTITLE';
-	}
-	else
-	{
-		$transactionRequestLine .= '^HKCOPY';
-	}
+	$transactionRequestLine .= '^HK'.$HOLD_TYPE;
 	$transactionRequestLine .= '^HH'.$holdKey;
 	$transactionRequestLine .= '^NQ'.$itemId;
 	$transactionRequestLine .= '^IQ'.$callNumber;
@@ -277,7 +274,7 @@ while (<>)
 	# of the list will be unprocessed and the script will process all holds for the user.
 	if ( m/\*/ )
 	{
-		print HOLDKEYS `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_TYPE" -oI 2>/dev/null | selitem -iI -oB 2>/dev/null`;
+		print HOLDKEYS `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_CHAR" -oI | selitem -iI -oB`;
 		last;
 	}
 	my $barcode = $_;
@@ -296,7 +293,7 @@ my $itemIdCallnumHash = {};
 getItemCallnum( $itemIdCallnumHash );
 # now create the transactions
 cancelHolds( $opt{'B'}, $itemIdHoldKeyHash, $itemIdCallnumHash );
-unlink $TMP;
+# unlink $TMP;
 if ( $opt{'U'} )
 {
 	`apiserver -h <$HOLD_TRX >$HOLD_RSP` if ( -s $HOLD_TRX );
