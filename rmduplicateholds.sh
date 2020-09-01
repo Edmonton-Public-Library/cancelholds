@@ -30,7 +30,7 @@
 # ***           Edit these to suit your environment               *** #
 source /s/sirsi/Unicorn/EPLwork/cronjobscripts/setscriptenvironment.sh
 ###############################################################################
-VERSION=0.00.1   # Initial build.
+VERSION=1.00.0   # Initial build.
 CAT_KEY=''       # Global cat key used to find the title.
 TRUE=0
 FALSE=1
@@ -86,6 +86,7 @@ We need the server transactions to look like:
 
  -B [item_barcode] remove duplicate holds from the title to which this item barcode belongs.
  -C [cat_key] remove duplicates from the title with this catalogue key.
+ -T [TCN] remove duplicates from the title with this Title Control Number.
  -x Prints help message and exits.
 
    Version: $VERSION
@@ -128,7 +129,7 @@ remove_duplicate_holds()
         echo "No duplicate holds found on title $CAT_KEY"
         exit 0
     fi
-    # CallNum   |      #Holds|UserKey|HoldKey|CatKey|CallNum|CopyNum
+    # CallNum         |#Holds|UserKey|HoldKey|CatKey|CallNum|CopyNum
     # Video game 793.93 GHO|2|917862|35594572|2252251|3|1
     # Video game 793.93 GHO|2|92559|35590364|2252251|3|1
     # Video game 793.93 GHO|2|929556|35601105|2252251|1|1
@@ -200,7 +201,7 @@ confirm()
 }
 
 # Argument processing.
-while getopts ":B:C:x" opt; do
+while getopts ":B:C:T:x" opt; do
   case $opt in
     
     B)	echo "["`date +'%Y-%m-%d %H:%M:%S'`"] -B [item_barcode] removing duplicate holds from $OPTARG's title." >&2
@@ -210,6 +211,11 @@ while getopts ":B:C:x" opt; do
     
     C)	echo "["`date +'%Y-%m-%d %H:%M:%S'`"] -C [cat_key] removing duplicate holds from cat key $OPTARG." >&2
         CAT_KEY=$( echo $OPTARG | pipe.pl -oc0 ) # Makes sure any piped in cat key doesn't have a trailing '|' character.
+        remove_duplicate_holds
+        ;;
+    
+    T)	echo "["`date +'%Y-%m-%d %H:%M:%S'`"] -T [TCN] removing duplicate holds from cat key with TCN $OPTARG." >&2
+        CAT_KEY=$( echo $OPTARG | selcatalog -iF -oC | pipe.pl -oc0 ) # Makes sure any piped in cat key doesn't have a trailing '|' character.
         remove_duplicate_holds
         ;;
 
