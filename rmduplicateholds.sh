@@ -102,7 +102,7 @@ get_cat_key()
         echo "**error expected item barcode but got nothing. Exiting."
         exit 3
     else
-        CAT_KEY=$( echo $1 | selitem -iB -oC )
+        CAT_KEY=$( echo $1 | selitem -iB -oC | pipe.pl -oc0 )
     fi
 }
 
@@ -124,6 +124,10 @@ remove_duplicate_holds()
     # 4) Use pipe.pl again to output only counts greater than 1. These are the just the users that have more than one hold on this title.
     # 5) Next order the output so the cat key and sequence number can be used to find the call num (shelving code).
     echo $CAT_KEY | selhold -iC -jACTIVE -tT -oUKI | pipe.pl -dc0 -A -P | pipe.pl -Cc0:gt1 | pipe.pl -oc3,c4,c0,c1,c2,c3,c4,c5 | selcallnum -iN -oDS >$tmp_file.1.tmp
+    if [ ! -s "$tmp_file.1.tmp" ]; then
+        echo "No duplicate holds found on title $CAT_KEY"
+        exit 0
+    fi
     # CallNum   |      #Holds|UserKey|HoldKey|CatKey|CallNum|CopyNum
     # Video game 793.93 GHO|2|917862|35594572|2252251|3|1
     # Video game 793.93 GHO|2|92559|35590364|2252251|3|1
@@ -154,20 +158,20 @@ remove_duplicate_holds()
     # ^S13FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221022130774^HKTITLE^HH35618816^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
     # ^S14FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221025309128^HKTITLE^HH35607630^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
     
-    local transactions=duplicatehold.$CAT_KEY.transactions
-    cp $tmp_file.2.tmp $transactions
+    local transactions="rmduplicatehold.$CAT_KEY.transactions"
+    cp $tmp_file.3.tmp $transactions
     local responses=duplicatehold.$CAT_KEY.responses
-    local answer=$(confirm "Do you want to continue with removing duplicate holds from title $CAT_KEY? ")
+    local answer=$(confirm "Do you want to continue with removing duplicate holds from title $CAT_KEY ")
     if [ "$answer" == "$FALSE" ]; then
-        echo "table will be preserved. exiting" >&2
+        echo "Exiting, but transactions can be found in file $transactions" >&2
         exit $FALSE
     fi
     if [ -s "$transactions" ]; then
+        apiserver -h <$transactions >$responses
+    else
         echo "**error $transactions is empty or missing from "`pwd`". Exiting."
         exit 4
     fi
-    echo "... dummy running apiserver..."
-    # apiserver -h <$transactions >$responses
 }
 
 
@@ -205,7 +209,7 @@ while getopts ":B:C:x" opt; do
         ;;
     
     C)	echo "["`date +'%Y-%m-%d %H:%M:%S'`"] -C [cat_key] removing duplicate holds from cat key $OPTARG." >&2
-        CAT_KEY=$OPTARG
+        CAT_KEY=$( echo $OPTARG | pipe.pl -oc0 ) # Makes sure any piped in cat key doesn't have a trailing '|' character.
         remove_duplicate_holds
         ;;
 
