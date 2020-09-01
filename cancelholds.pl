@@ -26,6 +26,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Tue Mar 18 09:30:05 MDT 2014
 # Rev: 
+#          0.8.03 - Fix usage.
 #          0.8.02 - Fixs in general.
 #          0.8.01 - Fix warning on stdout.
 #          0.8 - Accept on order item ids.
@@ -61,7 +62,7 @@ my $HOLD_RSP   = "$WORKING_DIR/cancel_hold.rsp";
 my $TMP        = "$WORKING_DIR/cancel_hold.tmp";
 my $HOLD_TYPE  = qq{COPY};
 my $HOLD_CHAR  = '';         # The hold type during API selection with selhold. Filled in in init().
-my $VERSION    = qq{0.8.02};
+my $VERSION    = qq{0.8.03};
 
 #
 # Message about this program and how to use it.
@@ -70,7 +71,7 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-xUt] -B<barcode> 
+	usage: $0 [-BktUx] -B<barcode> 
 Cancels copy level holds. The script expects a list of items on stdin
 which must have the barcode of the item; one per line. Alternatively
 you can use '*' on STDIN to cancel all holds on customer account.
@@ -132,7 +133,7 @@ sub getUserHolds( $$ )
 	my $results  = `echo "$userID" | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_CHAR" -oIK | selitem -iI -oBS`;
 	# Which produces something like:
 	# Item ID         |Holdkey|
-	# 31221052193963  |8863617|
+	# 31221052193963  |8863617|9978661
 	# 738812-1001     |8914672|
 	# 31221073080421  |9098195|
 	my @lines = split( '\n', $results );
@@ -149,6 +150,7 @@ sub getUserHolds( $$ )
 		{
 			$holdHash->{ $itemId } = $holdKey;
 		}
+        printf "\$holdHash->{ $itemId }=%s\n", $holdHash->{ $itemId };
 	}
 }
 
@@ -168,6 +170,7 @@ sub getItemCallnum( $ )
 		$hashRef->{$itemId} = "$callnum|$copyNum";
 	}
 }
+
 # Given a selection of hold keys, pick the smallest, it is the oldest.
 # param:  array of hold keys.
 # return: oldest hold key.
@@ -267,30 +270,40 @@ sub getCancelHoldTransaction( $$$$$$ )
 
 init();
 
-open HOLDKEYS, ">$TMP"  or die "**Error: unable to open tmp file '$TMP', $!\n";
+open ITEMBARCODES, ">$TMP"  or die "**Error: unable to open tmp file '$TMP', $!\n";
 while (<>) 
 {
 	# Allow a user to specify all holds with a '*'. If this occurs mid list the remainder
 	# of the list will be unprocessed and the script will process all holds for the user.
 	if ( m/\*/ )
 	{
-		print HOLDKEYS `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_CHAR" -oI | selitem -iI -oB`;
+		print ITEMBARCODES `echo $opt{'B'} | seluser -iB -oU | selhold -iU -j"ACTIVE" -t"$HOLD_CHAR" -oI | selitem -iI -oB`;
 		last;
 	}
 	my $barcode = $_;
 	chomp $barcode;
 	$barcode =~ s/\s{1,}.+//g;
-	print HOLDKEYS "$barcode\n";
+	print ITEMBARCODES "$barcode\n";
 }
-close HOLDKEYS;
+close ITEMBARCODES;
 
 # Find the user's hold keys. We need to find the user's hold keys because
 # tools like selhold don't work with item keys only catalog keys.
 my $itemIdHoldKeyHash = {};
 getUserHolds( $opt{'B'}, $itemIdHoldKeyHash );
+printf "Output itemIdHoldKeyHash\n";
+while( my ($k, $v) = each %$itemIdHoldKeyHash ) 
+{
+    print "key: $k, value: $v.\n";
+}
 # This will store the items we want to cancel holds on and the callnums we need to do that job.
 my $itemIdCallnumHash = {};
 getItemCallnum( $itemIdCallnumHash );
+printf "Output itemIdCallnumHash";
+while( my ($k, $v) = each %$itemIdCallnumHash ) 
+{
+    print "key: $k, value: $v.\n";
+}
 # now create the transactions
 cancelHolds( $opt{'B'}, $itemIdHoldKeyHash, $itemIdCallnumHash );
 # unlink $TMP;

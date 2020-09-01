@@ -1,5 +1,69 @@
 === Tue Mar 18 09:30:05 MDT 2014 ===
 
+To refactor this project consider the following. 
+1) echo the item id to selitem to get the cat key. 
+2) Find the user key, hold key, item key for all the active title holds on that title.
+3) Use pipe.pl to output the count of holds for each user key on the title. A side effect of the dedup process in pipe is only the last row to be deduplicated is output which works to our favor because it is also the largest hold key, and therefore the youngest. This means it can be cancelled leaving the oldest, or original hold key intact.
+4) Use pipe.pl again to output only counts greater than 1. These are the just the users that have more than one hold on this title.
+5) Next order the output so the cat key and sequence number can be used to find the call num (shelving code).
+ echo 2252251-1001 | selitem -iB -oC | selhold -iC -jACTIVE -tT -oUKI | pipe.pl -dc0 -A -P | pipe.pl -Cc0:gt1 | pipe.pl -oc3,c4,c0,c1,c2,c3,c4,c5 | selcallnum -iN -oDS
+CallNum   |      #Holds|UserKey|HoldKey|CatKey|CallNum|CopyNum
+Video game 793.93 GHO|2|917862|35594572|2252251|3|1
+Video game 793.93 GHO|2|92559|35590364|2252251|3|1
+Video game 793.93 GHO|2|929556|35601105|2252251|1|1
+Video game 793.93 GHO|2|941698|35590806|2252251|1|1
+Video game 793.93 GHO|2|966294|35599069|2252251|3|1
+Video game 793.93 GHO|2|974453|35589103|2252251|1|1
+Video game 793.93 GHO|2|985541|35589940|2252251|1|1
+Video game 793.93 GHO|2|992033|35597371|2252251|3|1
+Video game 793.93 GHO|2|994840|35650749|2252251|1|1
+
+With that we can reorganize the data to get all the elements we need to cancel a hold Those elements are a sequence number, the user's id, the hold key, item id, call num, sequence number, copy number, and the number of holds for the user which isn't used in the API transaction but shows if the customer have more than two holds on this title?
+
+6) Output the data above moving the item key to the front ready for selitem, and repeating seq. number, and copy number, then all other fields. We also take this oportunity to add a command code sequence number which ranges from 10 to 99.
+7) Use selitem to find the barcode in exchange for the item key and pass through everything else to the next stage.
+8) Trim the barcode which is always padded with trailing spaces, and move the user's key (c5) to the front for the next lookup.
+9) Use seluser to get the user's barcode in exchange for their user key and pass through everything else.
+10) Reorder all columns to match how they are used in the API transaction command line. Again the last column indicates how many holds the user has. All the above steps can be rerun on the same title to remove additional holds.
+cat andrew_test0.txt | pipe.pl -oc4,c5,c6,c5,c6,remaining -2c15:10,99 | selitem -iI -oBS | pipe.pl -tc0 -oc5,remaining | seluser -iU -oBS | pipe.pl -oc7,c0,c6,c1,c4,c2,c3,remaining
+S#| UserId       |HoldKey |ItemID      | CallNum             |Seq#|Copy#|#Holds
+70|21221019254397|35598291|2252251-3001|Video game 793.93 GHO|3|1|2
+71|21221015598482|35622993|2252251-1001|Video game 793.93 GHO|1|1|2
+72|21221022164443|35600664|2252251-1001|Video game 793.93 GHO|1|1|2
+73|21221028065602|35589238|2252251-1001|Video game 793.93 GHO|1|1|2
+74|21221023404921|35604196|2252251-3001|Video game 793.93 GHO|3|1|2
+75|21221021882698|35589265|2252251-1001|Video game 793.93 GHO|1|1|2
+76|21221021794182|35594572|2252251-3001|Video game 793.93 GHO|3|1|2
+77|21221021201063|35590364|2252251-3001|Video game 793.93 GHO|3|1|2
+78|21221025815561|35601105|2252251-1001|Video game 793.93 GHO|1|1|2
+79|21221022269184|35590806|2252251-1001|Video game 793.93 GHO|1|1|2
+80|21221021647950|35599069|2252251-3001|Video game 793.93 GHO|3|1|2
+81|21221027161758|35589103|2252251-1001|Video game 793.93 GHO|1|1|2
+82|21221023000331|35589940|2252251-1001|Video game 793.93 GHO|1|1|2
+83|21221022514381|35597371|2252251-3001|Video game 793.93 GHO|3|1|2
+84|21221022175423|35650749|2252251-1001|Video game 793.93 GHO|1|1|2
+
+11) Use the data above to create the apiserver commands with pipe.pl's -m mask command.
+We need the server transactions to look like: 
+^S87FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UODISCARD-BTGFTG^HKCOPY^HH22193634^NQ31221111074451^IQMOR^IS1^dC3^Fv3000000^^O
+
+which looks like
+
+ head andrew_test1.txt | pipe.pl -mc0:"^S##FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN",c1:"UO#",c2:"HKTITLE^HH#",c3:"NQ#",c4:"IQ#",c5:"IS#",c6:"dC#",c7:"Fv3000000^^O"   -h'^'
+ 
+^S10FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221021688814^HKTITLE^HH35627742^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
+^S11FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221021599292^HKTITLE^HH35587428^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
+^S12FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221027948378^HKTITLE^HH35601566^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
+^S13FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221022130774^HKTITLE^HH35618816^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
+^S14FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221025309128^HKTITLE^HH35607630^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
+^S15FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221023600999^HKTITLE^HH35621777^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
+^S16FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221023606475^HKTITLE^HH35608428^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
+^S17FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221025946267^HKTITLE^HH35623936^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
+^S18FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221021569113^HKTITLE^HH35600966^NQ2252251-1001^IQVideo game 793.93 GHO^IS1^dC1^Fv3000000^^O
+^S19FZFFADMIN^FEEPLMNA^FcNONE^FWADMIN^UO21221027935276^HKTITLE^HH35701507^NQ2252251-3001^IQVideo game 793.93 GHO^IS3^dC1^Fv3000000^^O
+
+All this is now done in rmduplicateholds.sh
+
 Project Notes
 -------------
 Cancels copy level holds. The script expects a list of items on stdin

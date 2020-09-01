@@ -22,6 +22,7 @@
 #
 # Written by Andrew Nisbet at Edmonton Public Library
 # Rev: 
+#      1.0 - Added rmduplicateholds.sh to test and production rules. 
 #      0.0 - Dev. 
 ####################################################
 # Change comment below for appropriate server.
@@ -31,10 +32,12 @@ USER=sirsi
 REMOTE=~/Unicorn/Bincustom/
 LOCAL=~/projects/cancelholds/
 APP=cancelholds.pl
+RMDUPLICATES=rmduplicateholds.sh
 ARGS=-x
 
 put: test
 	scp ${LOCAL}${APP} ${USER}@${TEST_SERVER}:${REMOTE}
+	scp ${LOCAL}${RMDUPLICATES} ${USER}@${TEST_SERVER}:${REMOTE}
 	ssh ${USER}@${TEST_SERVER} '${REMOTE}${APP} ${ARGS}'
 
 test:
@@ -42,4 +45,5 @@ test:
 	
 production: test
 	scp ${LOCAL}${APP} ${USER}@${PRODUCTION_SERVER}:${REMOTE}
+	scp ${LOCAL}${RMDUPLICATES} ${USER}@${PRODUCTION_SERVER}:${REMOTE}
 
